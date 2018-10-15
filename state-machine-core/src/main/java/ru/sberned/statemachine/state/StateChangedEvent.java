@@ -8,39 +8,29 @@ import java.util.Collections;
  * Created by Evgeniya Patuk (jpatuk@gmail.com) on 01/11/2016.
  */
 public class StateChangedEvent<E, ID> implements Serializable {
-    private Collection<ID> ids;
+    private ID id;
     private E newState;
 
-    private Object info;
+    private StateChangedInfo info;
 
-    public StateChangedEvent(Collection<ID> ids, E newState) {
-        this.ids = ids;
-        this.newState = newState;
-    }
-
-    public StateChangedEvent(Collection<ID> ids, E newState, Object info) {
-        this.ids = ids;
-        this.newState = newState;
-        this.info = info;
-    }
 
     public StateChangedEvent(ID id, E newState) {
-        this.ids = Collections.singletonList(id);
+        this.id = id;
         this.newState = newState;
     }
 
-    public StateChangedEvent(ID id, E newState, Object info) {
-        this.ids = Collections.singletonList(id);
+    public StateChangedEvent(ID id, E newState, StateChangedInfo info) {
+        this.id = id;
         this.newState = newState;
         this.info = info;
     }
 
-    public Collection<ID> getIds() {
-        return ids;
+    public ID getId() {
+        return id;
     }
 
-    public void setIds(Collection<ID> ids) {
-        this.ids = ids;
+    public void setId(ID id) {
+        this.id = id;
     }
 
     public E getNewState() {
@@ -51,11 +41,11 @@ public class StateChangedEvent<E, ID> implements Serializable {
         this.newState = newState;
     }
 
-    public Object getInfo() {
+    public StateChangedInfo getInfo() {
         return info;
     }
 
-    private void setInfo(Object info) {
+    private void setInfo(StateChangedInfo info) {
         this.info = info;
     }
 
@@ -66,14 +56,14 @@ public class StateChangedEvent<E, ID> implements Serializable {
 
         StateChangedEvent<?, ?> that = (StateChangedEvent<?, ?>) o;
 
-        if (ids != null ? !ids.equals(that.ids) : that.ids != null) return false;
+        if (id != null ? !id.equals(that.id) : that.id != null) return false;
         if (newState != null ? !newState.equals(that.newState) : that.newState != null) return false;
         return info != null ? info.equals(that.info) : that.info == null;
     }
 
     @Override
     public int hashCode() {
-        int result = ids != null ? ids.hashCode() : 0;
+        int result = id != null ? id.hashCode() : 0;
         result = 31 * result + (newState != null ? newState.hashCode() : 0);
         return result;
     }

@@ -4,6 +4,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.jdbc.core.BatchPreparedStatementSetter;
 import org.springframework.jdbc.core.JdbcTemplate;
 import ru.sberned.statemachine.state.ItemWithStateProvider;
+import ru.sberned.statemachine.state.StateChangedInfo;
 import ru.sberned.statemachine.state.StateChanger;
 
 import java.sql.PreparedStatement;
@@ -40,7 +41,7 @@ public class DBStateProvider implements ItemWithStateProvider<Item, String>, Sta
     }
 
     @Override
-    public void moveToState(CustomState state, Item item, Object... infos) {
+    public void moveToState(CustomState state, Item item, StateChangedInfo info) {
         jdbcTemplate.update("UPDATE item SET state = ? WHERE id = ?", state.name(), item.getId());
     }
 

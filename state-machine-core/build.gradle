@@ -1,0 +1,16 @@
+
+description = 'spring flow state machine core'
+dependencies {
+    compile(group: 'org.springframework.boot', name: 'spring-boot-starter', version:'1.5.3.RELEASE') {
+exclude(module: 'commons-logging')
+    }
+    compile group: 'org.springframework', name: 'spring-tx', version:'4.3.8.RELEASE'
+    compile group: 'com.google.guava', name: 'guava', version:'20.0'
+    compile group: 'org.slf4j', name: 'slf4j-api', version:'1.7.25'
+    testCompile(group: 'org.springframework.boot', name: 'spring-boot-starter-test', version:'1.5.3.RELEASE') {
+exclude(module: 'commons-logging')
+    }
+    testCompile group: 'org.springframework.boot', name: 'spring-boot-starter-jdbc', version:'1.5.3.RELEASE'
+    testCompile group: 'com.h2database', name: 'h2', version:'1.4.195'
+    testCompile group: 'org.hsqldb', name: 'hsqldb', version:'1.8.0.10'
+}

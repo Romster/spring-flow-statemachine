@@ -14,6 +14,7 @@ import ru.sberned.statemachine.state.StateChangedEvent;
 import ru.sberned.statemachine.state.StateChanger;
 import ru.sberned.statemachine.util.CustomState;
 import ru.sberned.statemachine.util.CustomStateProvider;
+import ru.sberned.statemachine.util.DummyTransactionManager;
 import ru.sberned.statemachine.util.Item;
 
 import java.util.Collections;
@@ -26,6 +27,7 @@ import java.util.concurrent.locks.Lock;
 import static org.mockito.Mockito.*;
 import static ru.sberned.statemachine.processor.UnhandledMessageProcessor.IssueType.*;
 import static ru.sberned.statemachine.util.CustomState.*;
+import static ru.sberned.statemachine.util.StateChangedInfoImpl.info;
 
 /**
  * Created by Evgeniya Patuk (jpatuk@gmail.com) on 17/06/2017.
@@ -76,9 +78,9 @@ public class StateMachineUnhandledMessagesTests {
 
         stateMachine.setStateRepository(stateHolder);
 
-        publisher.publishEvent(new StateChangedEvent("1", STATE1));
+        new Thread(() ->  publisher.publishEvent(new StateChangedEvent("1", STATE1))).start();
         Thread.sleep(100);
-        publisher.publishEvent(new StateChangedEvent("1", STATE2));
+        new Thread(() ->  publisher.publishEvent(new StateChangedEvent("1", STATE2))).start();
 
         verify(processor, timeout(3000).times(1)).process("1", STATE2, TIMEOUT, null);
     }
@@ -93,9 +95,9 @@ public class StateMachineUnhandledMessagesTests {
                 .to(STATE1)
                 .build();
         StateMachine<Item, CustomState, String> stateMachine = new StateMachine<>(stateProvider, (state, item, infos) -> {
-        }, key -> new ErroringLockProvider());
+        }, key -> new ErroringLockProvider(), new DummyTransactionManager());
         stateMachine.setStateRepository(stateHolder);
-        Map dummy = stateMachine.changeState(Collections.singletonList("1"), STATE1, "dummy");
+        boolean dummy = stateMachine.changeState("1", STATE1, info("dummy"));
 
         verify(processor, timeout(2000).times(1)).process(eq("1"), eq(STATE1), eq(INTERRUPTED_EXCEPTION), any(InterruptedException.class));
     }
@@ -124,7 +126,7 @@ public class StateMachineUnhandledMessagesTests {
         stateMachine.setStateRepository(stateHolder);
 
         RuntimeException ex = new RuntimeException();
-        doThrow(ex).when(onTransition).moveToState(STATE1, new Item("1", CustomState.START));
+        doThrow(ex).when(onTransition).moveToState(STATE1, new Item("1", CustomState.START), null);
 
         publisher.publishEvent(new StateChangedEvent("1", STATE1));
 

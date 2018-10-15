@@ -9,10 +9,12 @@
     <relativePath></relativePath>
     <!-- lookup parent from repository -->
   </parent>
+
   <groupId>ru.sberned.statemachine</groupId>
   <artifactId>spring-flow-state-machine</artifactId>
-  <version>1.1.1</version>
+  <version>2.0.0-SNAPSHOT</version>
   <packaging>pom</packaging>
+
   <name>spring flow state machine</name>
   <description>Spring state machine for entities, not for application</description>
   <modules>

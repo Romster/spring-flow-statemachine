@@ -3,6 +3,7 @@ package ru.sberned.statemachine;
 import org.springframework.boot.autoconfigure.EnableAutoConfiguration;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
 import ru.sberned.statemachine.lock.LockProvider;
 import ru.sberned.statemachine.lock.MapLockProvider;
 import ru.sberned.statemachine.state.ItemWithStateProvider;
@@ -33,7 +34,7 @@ public class ITConfig {
     }
 
     @Bean
-    public StateMachine<Item, CustomState, String> stateMachine() {
-        return new StateMachine<>(stateProvider(), stateChanger(), stateLock());
+    public StateMachine<Item, CustomState, String> stateMachine(PlatformTransactionManager txManager) {
+        return new StateMachine<>(stateProvider(), stateChanger(), stateLock(), txManager);
     }
 }

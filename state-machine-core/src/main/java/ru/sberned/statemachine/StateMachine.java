@@ -5,25 +5,18 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.event.EventListener;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.Assert;
 import ru.sberned.statemachine.exception.StateMachineException;
 import ru.sberned.statemachine.lock.LockProvider;
 import ru.sberned.statemachine.processor.UnableToProcessException;
 import ru.sberned.statemachine.processor.UnhandledMessageProcessor;
 import ru.sberned.statemachine.processor.UnhandledMessageProcessor.IssueType;
-import ru.sberned.statemachine.state.HasStateAndId;
-import ru.sberned.statemachine.state.ItemWithStateProvider;
-import ru.sberned.statemachine.state.StateChangedEvent;
-import ru.sberned.statemachine.state.StateChanger;
+import ru.sberned.statemachine.state.*;
 
 import java.text.MessageFormat;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 
@@ -31,26 +24,32 @@ import static ru.sberned.statemachine.processor.UnhandledMessageProcessor.IssueT
 
 /**
  * Created by Evgeniya Patuk (jpatuk@gmail.com) on 09/11/2016.
+ * Modified by Nikolai Romanov 12/10/2018
  */
 public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
     private static final Logger LOGGER = LoggerFactory.getLogger(StateMachine.class);
+
     private final ItemWithStateProvider<ENTITY, ID> stateProvider;
     private final StateChanger<ENTITY, STATE> stateChanger;
     private final LockProvider lockProvider;
-    // To make @Transactional work
-    @Autowired
-    private StateMachine<ENTITY, STATE, ID> stateMachine = this;
+    private final PlatformTransactionManager transactionManager;
+
     volatile private StateRepository<ENTITY, STATE, ID> stateRepository;
     @Value("${statemachine.lock.timeout.ms:5000}")
     private long lockTimeout;
+    @Value("${statemachine.transaction.always-new:false}")
+    private boolean isOpenNewTransaction;
+
 
     @Autowired
     public StateMachine(ItemWithStateProvider<ENTITY, ID> stateProvider,
                         StateChanger<ENTITY, STATE> stateChanger,
-                        LockProvider lockProvider) {
+                        LockProvider lockProvider,
+                        PlatformTransactionManager transactionManager) {
         this.stateProvider = stateProvider;
         this.stateChanger = stateChanger;
         this.lockProvider = lockProvider;
+        this.transactionManager = transactionManager;
     }
 
     public void setStateRepository(StateRepository<ENTITY, STATE, ID> stateRepository) {
@@ -61,36 +60,24 @@ public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
     public void handleStateChanged(StateChangedEvent<STATE, ID> event) {
         Assert.notNull(stateRepository, "StateRepository must be initialized!");
 
-        changeState(event.getIds(), event.getNewState(), event.getInfo());
+        changeState(event.getId(), event.getNewState(), event.getInfo());
     }
 
-    public Map<ID, Future<Boolean>> changeState(Collection<ID> ids, STATE newState, Object info) {
-        if (ids != null) {
-            Map<ID, Future<Boolean>> processingResults = new HashMap<>();
-            ids.forEach(id -> {
-                Future<Boolean> future = CompletableFuture.supplyAsync(() -> {
-                    try {
-                        stateMachine.handleMessage(id, newState, info);
-                        return true;
-                    } catch (StateMachineException e) {
-                        handleIncorrectCase(id, newState, e.getIssueType(), null);
-                    } catch (InterruptedException e) {
-                        handleIncorrectCase(id, newState, INTERRUPTED_EXCEPTION, e);
-                    } catch (Exception e) {
-                        handleIncorrectCase(id, newState, EXECUTION_EXCEPTION, e);
-                    }
-                    return false;
-                });
-                processingResults.put(id, future);
-            });
-            return processingResults;
-        }
-        return Collections.emptyMap();
+    public boolean changeState(ID id, STATE newState) {
+        return changeState(id, newState, null);
     }
 
-    // public is here to make @Transactional work
-    @Transactional(rollbackFor = {Exception.class})
-    public void handleMessage(ID id, STATE newState, Object info) throws Exception {
+    public boolean changeState(ID id, STATE newState, StateChangedInfo info) {
+        if(id == null) throw new NullPointerException("id can't be null");
+        return handleMessage(id, newState, info);
+    }
+
+    public boolean handleMessage(ID id, STATE newState, StateChangedInfo info) {
+        return buildTxTemplate(id)
+                .execute(status -> doHandleMessage(id, newState, info));
+    }
+
+    private boolean doHandleMessage(ID id, STATE newState, StateChangedInfo info) {
         Lock lockObject = lockProvider.getLockObject(id);
         boolean locked = false;
         try {
@@ -101,15 +88,23 @@ public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
                 STATE currentState = entity.getState();
                 if (stateRepository.isValidTransition(currentState, newState)) {
                     processItem(entity, currentState, newState, info);
+                    return true;
                 } else {
                     throw new StateMachineException(INVALID_TRANSITION);
                 }
             } else {
                 throw new StateMachineException(TIMEOUT);
             }
+        } catch (StateMachineException e) {
+            handleIncorrectCase(id, newState, e.getIssueType(), null);
+        } catch (InterruptedException e) {
+            handleIncorrectCase(id, newState, INTERRUPTED_EXCEPTION, e);
+        } catch (Exception e) {
+            handleIncorrectCase(id, newState, EXECUTION_EXCEPTION, e);
         } finally {
             if (locked) lockObject.unlock();
         }
+        return false;
     }
 
     private void handleIncorrectCase(ID id, STATE newState, IssueType issueType, Exception e) {
@@ -124,7 +119,7 @@ public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
         }
     }
 
-    private void processItem(ENTITY item, STATE from, STATE to, Object info) {
+    private void processItem(ENTITY item, STATE from, STATE to, StateChangedInfo info) {
         stateRepository.getBeforeAll().forEach(handler -> {
             if (!handler.beforeTransition(item, to)) {
                 throw new UnableToProcessException();
@@ -139,10 +134,20 @@ public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
         if (info != null) {
             stateChanger.moveToState(to, item, info);
         } else {
-            stateChanger.moveToState(to, item);
+            stateChanger.moveToState(to, item, null);
         }
 
         stateRepository.getAfter(from, to).forEach(handler -> handler.afterTransition(item));
         stateRepository.getAfterAll().forEach(handler -> handler.afterTransition(item, to));
+    }
+
+    private TransactionTemplate buildTxTemplate(ID id) {
+        TransactionTemplate transactionTemplate = new TransactionTemplate(transactionManager);
+        transactionTemplate.setName("StateMachine-Transaction-id");
+        transactionTemplate.setPropagationBehavior(this.isOpenNewTransaction
+                ? Propagation.REQUIRES_NEW.value()
+                : Propagation.REQUIRED.value());
+
+        return transactionTemplate;
     }
 }

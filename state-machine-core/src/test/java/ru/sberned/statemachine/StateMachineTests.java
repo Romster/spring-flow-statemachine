@@ -13,6 +13,7 @@ import ru.sberned.statemachine.StateRepository.StateRepositoryBuilder;
 import ru.sberned.statemachine.state.*;
 import ru.sberned.statemachine.util.CustomState;
 import ru.sberned.statemachine.util.CustomStateProvider;
+import ru.sberned.statemachine.util.Events;
 import ru.sberned.statemachine.util.Item;
 
 import java.util.*;
@@ -21,6 +22,8 @@ import java.util.concurrent.Future;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
+import static ru.sberned.statemachine.util.Events.publishAsynchronously;
+import static ru.sberned.statemachine.util.StateChangedInfoImpl.info;
 
 @SuppressWarnings("unchecked")
 @RunWith(SpringRunner.class)
@@ -69,7 +72,7 @@ public class StateMachineTests {
 
         stateMachine.setStateRepository(stateHolder);
         publisher.publishEvent(new StateChangedEvent("1", CustomState.STATE1));
-        verify(onTransition, timeout(500).times(1)).moveToState(CustomState.STATE1, new Item("1", CustomState.START));
+        verify(onTransition, timeout(500).times(1)).moveToState(CustomState.STATE1, new Item("1", CustomState.START), null);
     }
 
     @Test
@@ -77,8 +80,8 @@ public class StateMachineTests {
         StateRepository<Item, CustomState, String> stateHolder = getDefaultTransition();
 
         stateMachine.setStateRepository(stateHolder);
-        publisher.publishEvent(new StateChangedEvent("1", CustomState.STATE1, "info"));
-        verify(onTransition, timeout(500).times(1)).moveToState(CustomState.STATE1, new Item("1", CustomState.START), "info");
+        publisher.publishEvent(new StateChangedEvent("1", CustomState.STATE1, info("info")));
+        verify(onTransition, timeout(500).times(1)).moveToState(CustomState.STATE1, new Item("1", CustomState.START), info("info"));
     }
 
     @Test
@@ -103,7 +106,7 @@ public class StateMachineTests {
         InOrder inOrder = inOrder(beforeTransition1, beforeTransition2, onTransition, afterTransition1, afterTransition2);
         inOrder.verify(beforeTransition1, times(1)).beforeTransition(item);
         inOrder.verify(beforeTransition2, times(1)).beforeTransition(item);
-        inOrder.verify(onTransition, times(1)).moveToState(CustomState.STATE1, item);
+        inOrder.verify(onTransition, times(1)).moveToState(CustomState.STATE1, item, null);
         inOrder.verify(afterTransition1, times(1)).afterTransition(item);
         inOrder.verify(afterTransition2, times(1)).afterTransition(item);
     }
@@ -196,14 +199,16 @@ public class StateMachineTests {
 
         stateMachine.setStateRepository(stateHolder);
 
-        publisher.publishEvent(new StateChangedEvent(Arrays.asList("1", "4"), CustomState.STATE1));
-        publisher.publishEvent(new StateChangedEvent(Arrays.asList("1", "4"), CustomState.STATE2));
-        publisher.publishEvent(new StateChangedEvent("6", CustomState.STATE1));
-        publisher.publishEvent(new StateChangedEvent("6", CustomState.STATE2));
+        publishAsynchronously(new StateChangedEvent("1", CustomState.STATE1), publisher);
+        publishAsynchronously(new StateChangedEvent("4", CustomState.STATE1), publisher);
+        publishAsynchronously(new StateChangedEvent("1", CustomState.STATE2), publisher);
+        publishAsynchronously(new StateChangedEvent("4", CustomState.STATE2), publisher);
+        publishAsynchronously(new StateChangedEvent("6", CustomState.STATE1), publisher);
+        publishAsynchronously(new StateChangedEvent("6", CustomState.STATE2), publisher);
 
-        verify(onTransition, timeout(500).times(1)).moveToState(any(CustomState.class), eq(new Item("1", CustomState.START)));
-        verify(onTransition, timeout(500).times(1)).moveToState(any(CustomState.class), eq(new Item("4", CustomState.START)));
-        verify(onTransition, timeout(500).times(1)).moveToState(any(CustomState.class), eq(new Item("6", CustomState.START)));
+        verify(onTransition, timeout(500).times(1)).moveToState(any(CustomState.class), eq(new Item("1", CustomState.START)), any());
+        verify(onTransition, timeout(500).times(1)).moveToState(any(CustomState.class), eq(new Item("4", CustomState.START)), any());
+        verify(onTransition, timeout(500).times(1)).moveToState(any(CustomState.class), eq(new Item("6", CustomState.START)), any());
     }
 
     @Test
@@ -212,7 +217,7 @@ public class StateMachineTests {
 
         stateMachine.setStateRepository(stateHolder);
         publisher.publishEvent(new StateChangedEvent("2", CustomState.STATE1));
-        verify(onTransition, timeout(500).times(0)).moveToState(CustomState.STATE1, new Item("2", CustomState.STATE1));
+        verify(onTransition, timeout(500).times(0)).moveToState(CustomState.STATE1, new Item("2", CustomState.STATE1), null);
     }
 
     @Test
@@ -240,7 +245,7 @@ public class StateMachineTests {
         InOrder inOrder = inOrder(beforeAny, beforeTransition1, onTransition, afterAny, afterTransition1);
         inOrder.verify(beforeAny, times(1)).beforeTransition(item, CustomState.STATE1);
         inOrder.verify(beforeTransition1, times(1)).beforeTransition(item);
-        inOrder.verify(onTransition, times(1)).moveToState(CustomState.STATE1, item);
+        inOrder.verify(onTransition, times(1)).moveToState(CustomState.STATE1, item, null);
         inOrder.verify(afterTransition1, times(1)).afterTransition(item);
         inOrder.verify(afterAny, times(1)).afterTransition(item, CustomState.STATE1);
     }
@@ -250,20 +255,16 @@ public class StateMachineTests {
         StateRepository<Item, CustomState, String> stateHolder = getDefaultTransition();
 
         stateMachine.setStateRepository(stateHolder);
-        Map<String, Future<Boolean>> results = stateMachine.changeState(Collections.singletonList("1"), CustomState.STATE1, null);
-        assertNotNull(results.get("1"));
-        assertTrue(results.get("1").get());
+        boolean result = stateMachine.changeState("1", CustomState.STATE1);
+        assertTrue(result);
     }
 
-    @Test
+    @Test(expected = NullPointerException.class)
     public void shoudReturnEmptyMapOnNullOrEmptyEvents() throws ExecutionException, InterruptedException {
         StateRepository<Item, CustomState, String> stateHolder = getDefaultTransition();
-
         stateMachine.setStateRepository(stateHolder);
-        Map<String, Future<Boolean>> results = stateMachine.changeState(Collections.EMPTY_LIST, CustomState.STATE1, null);
-        assertTrue(results.isEmpty());
-        results = stateMachine.changeState(null, CustomState.STATE1, null);
-        assertTrue(results.isEmpty());
+        stateMachine.changeState(null, CustomState.STATE1, null);
+        fail();
     }
 
     @Test
@@ -271,8 +272,7 @@ public class StateMachineTests {
         StateRepository<Item, CustomState, String> stateHolder = getDefaultTransition();
 
         stateMachine.setStateRepository(stateHolder);
-        Map<String, Future<Boolean>> results = stateMachine.changeState(Collections.singletonList("1"), CustomState.STATE2, null);
-        assertNotNull(results.get("1"));
-        assertFalse(results.get("1").get());
+        boolean result = stateMachine.changeState("1", CustomState.STATE2, null);
+        assertFalse(result);
     }
 }
