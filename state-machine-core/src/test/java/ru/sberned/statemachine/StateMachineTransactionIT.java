@@ -12,11 +12,13 @@ import ru.sberned.statemachine.state.AfterAnyTransition;
 import ru.sberned.statemachine.state.StateChangedEvent;
 import ru.sberned.statemachine.util.CustomState;
 import ru.sberned.statemachine.util.DBStateProvider;
+import ru.sberned.statemachine.util.Events;
 import ru.sberned.statemachine.util.Item;
 
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static org.junit.Assert.assertEquals;
 import static ru.sberned.statemachine.util.CustomState.*;
@@ -30,7 +32,7 @@ import static ru.sberned.statemachine.util.CustomState.*;
 )
 public class StateMachineTransactionIT {
     @Autowired
-    private StateMachine<Item, CustomState, String> stateMachine;
+    private StateMachine<Item, String, CustomState> stateMachine;
     @Autowired
     private ApplicationEventPublisher publisher;
     @Autowired
@@ -62,16 +64,18 @@ public class StateMachineTransactionIT {
 
         stateMachine.setStateRepository(repository);
         List<String> items = Arrays.asList("1", "2");
-        publisher.publishEvent(new StateChangedEvent<>(items, STATE1));
+        List<StateChangedEvent> events = items
+                .stream()
+                .map(id -> new StateChangedEvent<>(id, STATE1)).collect(Collectors.toList());
+        Events.publishAsynchronouslyAndWait(events, publisher);
 
-        // events are handled in async mode
-        Thread.sleep(2000);
         verifyState(items, STATE1);
 
-        publisher.publishEvent(new StateChangedEvent<>(items, FINISH));
+        events = items
+                .stream()
+                .map(id -> new StateChangedEvent<>(id, FINISH)).collect(Collectors.toList());
+        Events.publishAsynchronouslyAndWait(events, publisher);
 
-        // events are handled in async mode
-        Thread.sleep(2000);
         verifyState(items, FINISH);
     }
 
@@ -92,10 +96,11 @@ public class StateMachineTransactionIT {
 
         stateMachine.setStateRepository(repository);
         List<String> items = Arrays.asList("1", "2", "4", "5", "6", "7");
-        publisher.publishEvent(new StateChangedEvent<>(items, STATE1));
-
+        List<StateChangedEvent<CustomState, String>> events = items
+                .stream()
+                .map(id -> new StateChangedEvent<>(id, STATE1)).collect(Collectors.toList());
+        Events.publishAsynchronouslyAndWait(events, publisher);
         // events are handled in async mode
-        Thread.sleep(2000);
 
         verifyState(Arrays.asList("2", "3", "4"), START);
         verifyState(Arrays.asList("1", "5", "6", "7"), STATE1);
@@ -103,8 +108,12 @@ public class StateMachineTransactionIT {
 
     private void verifyState(List<String> ids, CustomState expectedState) {
         for (String id : ids) {
-            Item item = stateProvider.getItemById(id);
-            assertEquals(expectedState, item.getState());
+            verifyState(id, expectedState);
         }
+    }
+
+    private void verifyState(String id, CustomState expectedState) {
+        Item item = stateProvider.getItemById(id);
+        assertEquals("Id: " + id, expectedState, item.getState());
     }
 }

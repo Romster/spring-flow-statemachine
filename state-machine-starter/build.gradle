@@ -1,0 +1,8 @@
+
+description = 'spring flow state machine starter'
+dependencies {
+    compile(group: 'org.springframework.boot', name: 'spring-boot-starter', version:'1.5.3.RELEASE') {
+exclude(module: 'commons-logging')
+    }
+  compile project(':state-machine-core')
+}

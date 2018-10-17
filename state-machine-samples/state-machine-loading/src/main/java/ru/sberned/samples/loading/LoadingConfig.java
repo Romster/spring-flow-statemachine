@@ -5,6 +5,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
 import ru.sberned.samples.loading.model.states.IAmLoadableState;
 import ru.sberned.samples.loading.service.StateInfoService;
 import ru.sberned.samples.loading.store.ItemStore;
@@ -12,9 +13,7 @@ import ru.sberned.statemachine.StateMachine;
 import ru.sberned.statemachine.StateRepository;
 import ru.sberned.statemachine.StateRepository.StateRepositoryBuilder;
 import ru.sberned.statemachine.lock.LockProvider;
-import ru.sberned.statemachine.state.BeforeAnyTransition;
-import ru.sberned.statemachine.state.ItemWithStateProvider;
-import ru.sberned.statemachine.state.StateChanger;
+import ru.sberned.statemachine.state.*;
 
 import java.util.Set;
 
@@ -33,11 +32,18 @@ public class LoadingConfig {
     @Autowired
     private StateInfoService stateInfoService;
 
+    private PlatformTransactionManager transactionManager;
+
     @Bean
-    public StateMachine<LoadableItem, IAmLoadableState, String> stateMachine() {
+    public StateMachine<LoadableItem, String, IAmLoadableState> stateMachine() {
         StateRepository<LoadableItem, IAmLoadableState, String> repository = createRepository();
 
-        StateMachine<LoadableItem, IAmLoadableState, String> stateMachine = new StateMachine<>(stateProvider(), stateChanger(), lockProvider);
+        StateMachine<LoadableItem, String, IAmLoadableState> stateMachine = new StateMachine<>(
+                stateProvider(),
+                itemIdAndStateExtractor(),
+                stateChanger(),
+                lockProvider,
+                transactionManager);
         stateMachine.setStateRepository(repository);
         return stateMachine;
     }
@@ -77,6 +83,11 @@ public class LoadingConfig {
     }
 
     @Bean
+    public ItemStateExtractor<LoadableItem, IAmLoadableState> itemIdAndStateExtractor() {
+        return new ListItemStateExtractor();
+    }
+
+    @Bean
     public StateChanger<LoadableItem, IAmLoadableState> stateChanger() {
         return new StateHandler();
     }
@@ -91,12 +102,19 @@ public class LoadingConfig {
         }
     }
 
+    public static class ListItemStateExtractor implements ItemStateExtractor<LoadableItem, IAmLoadableState> {
+        @Override
+        public IAmLoadableState getItemState(LoadableItem item) {
+            return item.getState();
+        }
+    }
+
     public static class StateHandler implements StateChanger<LoadableItem, IAmLoadableState> {
         @Autowired
         private ItemStore store;
 
         @Override
-        public void moveToState(IAmLoadableState state, LoadableItem item, Object... infos) {
+        public void moveToState(IAmLoadableState state, LoadableItem item, StateChangedInfo info) {
             LoadableItem itemFound = store.getItem(item);
             if (itemFound != null) {
                 itemFound.setState(state);

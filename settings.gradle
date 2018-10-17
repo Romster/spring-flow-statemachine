@@ -1,0 +1,14 @@
+rootProject.name = 'spring-flow-state-machine'
+include ':state-machine-core'
+include ':spring-flow-state-machine-starter'
+include ':state-machine-samples:state-machine-samples-simple'
+include ':state-machine-samples:state-machine-loading'
+include ':state-machine-samples'
+include ':dummy'
+
+project(':state-machine-core').projectDir = "$rootDir/state-machine-core" as File
+project(':spring-flow-state-machine-starter').projectDir = "$rootDir/state-machine-starter" as File
+project(':state-machine-samples:state-machine-samples-simple').projectDir = "$rootDir/state-machine-samples/state-machine-samples-simple" as File
+project(':state-machine-samples:state-machine-loading').projectDir = "$rootDir/state-machine-samples/state-machine-loading" as File
+project(':state-machine-samples').projectDir = "$rootDir/state-machine-samples" as File
+project(':dummy').projectDir = "$rootDir/dummy" as File

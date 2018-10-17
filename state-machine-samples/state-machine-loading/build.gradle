@@ -1,0 +1,6 @@
+
+description = 'spring flow state machine loading sample'
+dependencies {
+  compile project(':spring-flow-state-machine-starter')
+    compile group: 'org.slf4j', name: 'slf4j-api', version:'1.7.25'
+}

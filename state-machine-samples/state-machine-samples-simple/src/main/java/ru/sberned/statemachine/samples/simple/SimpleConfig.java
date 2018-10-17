@@ -5,15 +5,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.transaction.PlatformTransactionManager;
 import ru.sberned.statemachine.StateMachine;
 import ru.sberned.statemachine.StateRepository;
 import ru.sberned.statemachine.StateRepository.StateRepositoryBuilder;
 import ru.sberned.statemachine.lock.LockProvider;
 import ru.sberned.statemachine.samples.simple.store.ItemStore;
-import ru.sberned.statemachine.state.AfterTransition;
-import ru.sberned.statemachine.state.BeforeAnyTransition;
-import ru.sberned.statemachine.state.ItemWithStateProvider;
-import ru.sberned.statemachine.state.StateChanger;
+import ru.sberned.statemachine.state.*;
 
 import java.util.EnumSet;
 
@@ -31,7 +29,7 @@ public class SimpleConfig {
     private LockProvider lockProvider;
 
     @Bean
-    public StateMachine<SimpleItem, SimpleState, String> stateMachine() {
+    public StateMachine<SimpleItem, String, SimpleState> stateMachine(PlatformTransactionManager txManager) {
         StateRepository<SimpleItem, SimpleState, String> repository = StateRepositoryBuilder.<SimpleItem, SimpleState, String>configure()
                 .setAvailableStates(EnumSet.allOf(SimpleState.class))
                 .setUnhandledMessageProcessor((item, state, type, ex) -> LOGGER.error("Got unhandled item with id {}, issue is {}", item, type))
@@ -53,7 +51,12 @@ public class SimpleConfig {
                 .after((AfterTransition<SimpleItem>) item -> LOGGER.info("Moved from CANCELED"))
                 .build();
 
-        StateMachine<SimpleItem, SimpleState, String> stateMachine = new StateMachine<>(stateProvider(), stateChanger(), lockProvider);
+        StateMachine<SimpleItem, String, SimpleState> stateMachine = new StateMachine<>(
+                stateProvider(),
+                itemIdAndStateExtractor(),
+                stateChanger(),
+                lockProvider,
+                txManager);
         stateMachine.setStateRepository(repository);
         return stateMachine;
     }
@@ -61,6 +64,16 @@ public class SimpleConfig {
     @Bean
     public ItemWithStateProvider<SimpleItem, String> stateProvider() {
         return new ListStateProvider();
+    }
+
+    @Bean
+    public ItemStateExtractor<SimpleItem, SimpleState> itemIdAndStateExtractor() {
+        return new ListItemStateExtractor();
+    }
+
+    @Bean
+    public PlatformTransactionManager dummyPlatformTransactionManager() {
+        return new DummyTransactionManager();
     }
 
     @Bean
@@ -78,12 +91,20 @@ public class SimpleConfig {
         }
     }
 
+    public static class ListItemStateExtractor implements ItemStateExtractor<SimpleItem, SimpleState> {
+
+        @Override
+        public SimpleState getItemState(SimpleItem item) {
+            return item.getState();
+        }
+    }
+
     public static class StateHandler implements StateChanger<SimpleItem, SimpleState> {
         @Autowired
         private ItemStore store;
 
         @Override
-        public void moveToState(SimpleState state, SimpleItem item, Object... infos) {
+        public void moveToState(SimpleState state, SimpleItem item, StateChangedInfo info) {
             SimpleItem itemFound = store.getItem(item);
             if (itemFound != null) {
                 itemFound.setState(state);

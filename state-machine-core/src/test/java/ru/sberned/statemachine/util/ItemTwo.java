@@ -1,8 +1,6 @@
 package ru.sberned.statemachine.util;
 
-import ru.sberned.statemachine.state.HasStateAndId;
-
-public class ItemTwo implements HasStateAndId<String, StateTwo> {
+public class ItemTwo {
     private StateTwo state;
     private String id;
 
@@ -11,12 +9,10 @@ public class ItemTwo implements HasStateAndId<String, StateTwo> {
         state = new StateTwo.StartStateTwo();
     }
 
-    @Override
     public String getId() {
         return id;
     }
 
-    @Override
     public StateTwo getState() {
         return state;
     }
