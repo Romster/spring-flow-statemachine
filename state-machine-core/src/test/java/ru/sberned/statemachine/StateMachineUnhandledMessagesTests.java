@@ -12,14 +12,10 @@ import ru.sberned.statemachine.processor.UnableToProcessException;
 import ru.sberned.statemachine.processor.UnhandledMessageProcessor;
 import ru.sberned.statemachine.state.StateChangedEvent;
 import ru.sberned.statemachine.state.StateChanger;
-import ru.sberned.statemachine.util.CustomState;
-import ru.sberned.statemachine.util.CustomStateProvider;
-import ru.sberned.statemachine.util.DummyTransactionManager;
-import ru.sberned.statemachine.util.Item;
+import ru.sberned.statemachine.util.*;
 
 import java.util.Collections;
 import java.util.EnumSet;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
@@ -39,11 +35,13 @@ import static ru.sberned.statemachine.util.StateChangedInfoImpl.info;
 )
 public class StateMachineUnhandledMessagesTests {
     @Autowired
-    private StateMachine<Item, CustomState, String> stateMachine;
+    private StateMachine<Item, String, CustomState> stateMachine;
     @Autowired
     private ApplicationEventPublisher publisher;
     @Autowired
     private CustomStateProvider stateProvider;
+    @Autowired
+    private CustomStateExtractor idAndStateExtractor;
     @SpyBean
     private StateChanger<Item, CustomState> onTransition;
     private UnhandledMessageProcessor<String, CustomState> processor = mock(UnhandledMessageProcessor.class);
@@ -94,8 +92,12 @@ public class StateMachineUnhandledMessagesTests {
                 .from(CustomState.START)
                 .to(STATE1)
                 .build();
-        StateMachine<Item, CustomState, String> stateMachine = new StateMachine<>(stateProvider, (state, item, infos) -> {
-        }, key -> new ErroringLockProvider(), new DummyTransactionManager());
+        StateMachine<Item, String, CustomState> stateMachine = new StateMachine<>(
+                stateProvider,
+                idAndStateExtractor,
+                (state, item, infos) -> { },
+                key -> new ErroringLockProvider(),
+                new DummyTransactionManager());
         stateMachine.setStateRepository(stateHolder);
         boolean dummy = stateMachine.changeState("1", STATE1, info("dummy"));
 

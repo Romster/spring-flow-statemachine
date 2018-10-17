@@ -29,7 +29,7 @@ public class SimpleConfig {
     private LockProvider lockProvider;
 
     @Bean
-    public StateMachine<SimpleItem, SimpleState, String> stateMachine(PlatformTransactionManager txManager) {
+    public StateMachine<SimpleItem, String, SimpleState> stateMachine(PlatformTransactionManager txManager) {
         StateRepository<SimpleItem, SimpleState, String> repository = StateRepositoryBuilder.<SimpleItem, SimpleState, String>configure()
                 .setAvailableStates(EnumSet.allOf(SimpleState.class))
                 .setUnhandledMessageProcessor((item, state, type, ex) -> LOGGER.error("Got unhandled item with id {}, issue is {}", item, type))
@@ -51,7 +51,12 @@ public class SimpleConfig {
                 .after((AfterTransition<SimpleItem>) item -> LOGGER.info("Moved from CANCELED"))
                 .build();
 
-        StateMachine<SimpleItem, SimpleState, String> stateMachine = new StateMachine<>(stateProvider(), stateChanger(), lockProvider, txManager);
+        StateMachine<SimpleItem, String, SimpleState> stateMachine = new StateMachine<>(
+                stateProvider(),
+                itemIdAndStateExtractor(),
+                stateChanger(),
+                lockProvider,
+                txManager);
         stateMachine.setStateRepository(repository);
         return stateMachine;
     }
@@ -59,6 +64,11 @@ public class SimpleConfig {
     @Bean
     public ItemWithStateProvider<SimpleItem, String> stateProvider() {
         return new ListStateProvider();
+    }
+
+    @Bean
+    public ItemStateExtractor<SimpleItem, SimpleState> itemIdAndStateExtractor() {
+        return new ListItemStateExtractor();
     }
 
     @Bean
@@ -78,6 +88,14 @@ public class SimpleConfig {
         @Override
         public SimpleItem getItemById(String id) {
             return store.getItem(id);
+        }
+    }
+
+    public static class ListItemStateExtractor implements ItemStateExtractor<SimpleItem, SimpleState> {
+
+        @Override
+        public SimpleState getItemState(SimpleItem item) {
+            return item.getState();
         }
     }
 

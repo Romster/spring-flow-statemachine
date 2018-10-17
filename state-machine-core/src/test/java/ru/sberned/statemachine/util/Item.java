@@ -1,11 +1,9 @@
 package ru.sberned.statemachine.util;
 
-import ru.sberned.statemachine.state.HasStateAndId;
-
 /**
  * Created by Evgeniya Patuk (jpatuk@gmail.com) on 21/11/2016.
  */
-public class Item implements HasStateAndId<String, CustomState> {
+public class Item {
     private String id;
     public CustomState state;
 
@@ -14,7 +12,6 @@ public class Item implements HasStateAndId<String, CustomState> {
         this.state = state;
     }
 
-    @Override
     public CustomState getState() {
         return state;
     }
@@ -29,7 +26,6 @@ public class Item implements HasStateAndId<String, CustomState> {
         return id.hashCode();
     }
 
-    @Override
     public String getId() {
         return id;
     }

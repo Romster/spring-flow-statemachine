@@ -13,12 +13,10 @@ import ru.sberned.statemachine.StateRepository.StateRepositoryBuilder;
 import ru.sberned.statemachine.state.*;
 import ru.sberned.statemachine.util.CustomState;
 import ru.sberned.statemachine.util.CustomStateProvider;
-import ru.sberned.statemachine.util.Events;
 import ru.sberned.statemachine.util.Item;
 
 import java.util.*;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Future;
 
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
@@ -32,7 +30,7 @@ import static ru.sberned.statemachine.util.StateChangedInfoImpl.info;
 )
 public class StateMachineTests {
     @Autowired
-    private StateMachine<Item, CustomState, String> stateMachine;
+    private StateMachine<Item, String, CustomState> stateMachine;
     @Autowired
     private ApplicationEventPublisher publisher;
     @Autowired
@@ -156,7 +154,7 @@ public class StateMachineTests {
         StateRepository<Item, CustomState, String> stateHolder = StateRepositoryBuilder.<Item, CustomState, String>configure()
                 .setAvailableStates(EnumSet.allOf(CustomState.class))
                 .defineTransitions()
-                .from(null)
+                .from((CustomState) null)
                 .to(CustomState.STATE1)
                 .build();
 
@@ -169,7 +167,7 @@ public class StateMachineTests {
                 .setAvailableStates(EnumSet.allOf(CustomState.class))
                 .defineTransitions()
                 .from(CustomState.START)
-                .to(null)
+                .to((CustomState) null)
                 .build();
         stateMachine.setStateRepository(stateHolder);
     }

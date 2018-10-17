@@ -2,12 +2,11 @@ package ru.sberned.samples.loading;
 
 import ru.sberned.samples.loading.model.states.FirstState;
 import ru.sberned.samples.loading.model.states.IAmLoadableState;
-import ru.sberned.statemachine.state.HasStateAndId;
 
 /**
  * Created by Evgeniya Patuk (jpatuk@gmail.com) on 04/05/2017.
  */
-public class LoadableItem implements HasStateAndId<String, IAmLoadableState> {
+public class LoadableItem {
     private String id;
     private IAmLoadableState state = new FirstState();
 
@@ -30,7 +29,6 @@ public class LoadableItem implements HasStateAndId<String, IAmLoadableState> {
         return id.hashCode();
     }
 
-    @Override
     public IAmLoadableState getState() {
         return state;
     }

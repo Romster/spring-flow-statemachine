@@ -6,8 +6,10 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.transaction.PlatformTransactionManager;
 import ru.sberned.statemachine.lock.LockProvider;
 import ru.sberned.statemachine.lock.MapLockProvider;
+import ru.sberned.statemachine.state.ItemStateExtractor;
 import ru.sberned.statemachine.state.ItemWithStateProvider;
 import ru.sberned.statemachine.state.StateChanger;
+import ru.sberned.statemachine.util.CustomStateExtractor;
 import ru.sberned.statemachine.util.CustomState;
 import ru.sberned.statemachine.util.DBStateProvider;
 import ru.sberned.statemachine.util.Item;
@@ -24,6 +26,11 @@ public class ITConfig {
     }
 
     @Bean
+    public ItemStateExtractor<Item, CustomState> idAndStateExtractor() {
+        return new CustomStateExtractor();
+    }
+
+    @Bean
     public StateChanger<Item, CustomState> stateChanger() {
         return new DBStateProvider();
     }
@@ -34,7 +41,7 @@ public class ITConfig {
     }
 
     @Bean
-    public StateMachine<Item, CustomState, String> stateMachine(PlatformTransactionManager txManager) {
-        return new StateMachine<>(stateProvider(), stateChanger(), stateLock(), txManager);
+    public StateMachine<Item, String, CustomState> stateMachine(PlatformTransactionManager txManager) {
+        return new StateMachine<>(stateProvider(), idAndStateExtractor(), stateChanger(), stateLock(), txManager);
     }
 }

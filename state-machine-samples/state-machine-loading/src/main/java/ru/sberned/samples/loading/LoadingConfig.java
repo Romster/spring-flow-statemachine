@@ -13,10 +13,7 @@ import ru.sberned.statemachine.StateMachine;
 import ru.sberned.statemachine.StateRepository;
 import ru.sberned.statemachine.StateRepository.StateRepositoryBuilder;
 import ru.sberned.statemachine.lock.LockProvider;
-import ru.sberned.statemachine.state.BeforeAnyTransition;
-import ru.sberned.statemachine.state.ItemWithStateProvider;
-import ru.sberned.statemachine.state.StateChangedInfo;
-import ru.sberned.statemachine.state.StateChanger;
+import ru.sberned.statemachine.state.*;
 
 import java.util.Set;
 
@@ -38,10 +35,15 @@ public class LoadingConfig {
     private PlatformTransactionManager transactionManager;
 
     @Bean
-    public StateMachine<LoadableItem, IAmLoadableState, String> stateMachine() {
+    public StateMachine<LoadableItem, String, IAmLoadableState> stateMachine() {
         StateRepository<LoadableItem, IAmLoadableState, String> repository = createRepository();
 
-        StateMachine<LoadableItem, IAmLoadableState, String> stateMachine = new StateMachine<>(stateProvider(), stateChanger(), lockProvider, transactionManager);
+        StateMachine<LoadableItem, String, IAmLoadableState> stateMachine = new StateMachine<>(
+                stateProvider(),
+                itemIdAndStateExtractor(),
+                stateChanger(),
+                lockProvider,
+                transactionManager);
         stateMachine.setStateRepository(repository);
         return stateMachine;
     }
@@ -81,6 +83,11 @@ public class LoadingConfig {
     }
 
     @Bean
+    public ItemStateExtractor<LoadableItem, IAmLoadableState> itemIdAndStateExtractor() {
+        return new ListItemStateExtractor();
+    }
+
+    @Bean
     public StateChanger<LoadableItem, IAmLoadableState> stateChanger() {
         return new StateHandler();
     }
@@ -92,6 +99,13 @@ public class LoadingConfig {
         @Override
         public LoadableItem getItemById(String id) {
             return store.getItem(id);
+        }
+    }
+
+    public static class ListItemStateExtractor implements ItemStateExtractor<LoadableItem, IAmLoadableState> {
+        @Override
+        public IAmLoadableState getItemState(LoadableItem item) {
+            return item.getState();
         }
     }
 

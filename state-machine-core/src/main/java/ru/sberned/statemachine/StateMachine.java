@@ -26,10 +26,11 @@ import static ru.sberned.statemachine.processor.UnhandledMessageProcessor.IssueT
  * Created by Evgeniya Patuk (jpatuk@gmail.com) on 09/11/2016.
  * Modified by Nikolai Romanov 12/10/2018
  */
-public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
+public class StateMachine<ENTITY, ID, STATE> {
     private static final Logger LOGGER = LoggerFactory.getLogger(StateMachine.class);
 
     private final ItemWithStateProvider<ENTITY, ID> stateProvider;
+    private final ItemStateExtractor<ENTITY, STATE> idAndStateExtractor;
     private final StateChanger<ENTITY, STATE> stateChanger;
     private final LockProvider lockProvider;
     private final PlatformTransactionManager transactionManager;
@@ -43,10 +44,12 @@ public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
 
     @Autowired
     public StateMachine(ItemWithStateProvider<ENTITY, ID> stateProvider,
+                        ItemStateExtractor<ENTITY, STATE> idAndStateExtractor,
                         StateChanger<ENTITY, STATE> stateChanger,
                         LockProvider lockProvider,
                         PlatformTransactionManager transactionManager) {
         this.stateProvider = stateProvider;
+        this.idAndStateExtractor = idAndStateExtractor;
         this.stateChanger = stateChanger;
         this.lockProvider = lockProvider;
         this.transactionManager = transactionManager;
@@ -73,8 +76,21 @@ public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
     }
 
     public boolean handleMessage(ID id, STATE newState, StateChangedInfo info) {
-        return buildTxTemplate(id)
-                .execute(status -> doHandleMessage(id, newState, info));
+        try {
+            return buildTxTemplate(id)
+                    .execute(status -> doHandleMessage(id, newState, info));
+        } catch (StateMachineExceptionWrapper exWrapper) {
+            Exception ex = exWrapper.getWrappedException();
+
+            if(ex instanceof StateMachineException) {
+                handleIncorrectCase(id, newState, ((StateMachineException)ex).getIssueType(), null);
+            } else if(ex instanceof InterruptedException) {
+                handleIncorrectCase(id, newState, INTERRUPTED_EXCEPTION, ex);
+            } else {
+                handleIncorrectCase(id, newState, EXECUTION_EXCEPTION, ex);
+            }
+        }
+        return false;
     }
 
     private boolean doHandleMessage(ID id, STATE newState, StateChangedInfo info) {
@@ -85,7 +101,7 @@ public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
                 ENTITY entity = stateProvider.getItemById(id);
                 if (entity == null) throw new StateMachineException(ENTITY_NOT_FOUND);
 
-                STATE currentState = entity.getState();
+                STATE currentState = idAndStateExtractor.getItemState(entity);
                 if (stateRepository.isValidTransition(currentState, newState)) {
                     processItem(entity, currentState, newState, info);
                     return true;
@@ -95,16 +111,17 @@ public class StateMachine<ENTITY extends HasStateAndId<ID, STATE>, STATE, ID> {
             } else {
                 throw new StateMachineException(TIMEOUT);
             }
-        } catch (StateMachineException e) {
-            handleIncorrectCase(id, newState, e.getIssueType(), null);
-        } catch (InterruptedException e) {
-            handleIncorrectCase(id, newState, INTERRUPTED_EXCEPTION, e);
         } catch (Exception e) {
-            handleIncorrectCase(id, newState, EXECUTION_EXCEPTION, e);
+            throw new StateMachineExceptionWrapper(e);
         } finally {
-            if (locked) lockObject.unlock();
+            if(locked) {
+                try {
+                    lockObject.unlock();
+                } catch (RuntimeException ex) {
+                    LOGGER.error("Exception during unlocking", ex);
+                }
+            }
         }
-        return false;
     }
 
     private void handleIncorrectCase(ID id, STATE newState, IssueType issueType, Exception e) {
